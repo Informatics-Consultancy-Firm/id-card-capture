@@ -1,0 +1,70 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Copy root Java files into the package
+        run: |
+          mkdir -p app/src/main/java/icf/idcapture
+          shopt -s nullglob
+          for f in *.java; do
+            echo "adding $f"
+            cp "$f" app/src/main/java/icf/idcapture/
+          done
+          ls -l app/src/main/java/icf/idcapture/
+
+      - name: Copy root pages into the app assets
+        run: |
+          mkdir -p app/src/main/assets/www
+          shopt -s nullglob
+          for f in *.html *.css *.js *.png *.jpg *.jpeg *.svg; do
+            echo "bundling $f"
+            cp "$f" app/src/main/assets/www/
+          done
+          ls -l app/src/main/assets/www/
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.7'
+
+      - name: Build the debug APK
+        run: gradle assembleDebug --no-daemon
+
+      - name: Name the APK
+        id: apk
+        run: |
+          mv app/build/outputs/apk/debug/app-debug.apk id-capture-${{ github.run_number }}.apk
+          echo "file=id-capture-${{ github.run_number }}.apk" >> "$GITHUB_OUTPUT"
+
+      - name: Attach the APK to this run
+        uses: actions/upload-artifact@v4
+        with:
+          name: id-capture-apk
+          path: ${{ steps.apk.outputs.file }}
+
+      - name: Publish a release phones can download from
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: ID Capture build ${{ github.run_number }}
+          files: ${{ steps.apk.outputs.file }}
