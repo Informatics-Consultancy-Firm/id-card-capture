@@ -25,7 +25,7 @@ header p{margin:2px 0 0;color:#cfe0f2;font-size:12px}
 main{max-width:520px;margin:0 auto;padding:14px 14px 40px}
 .card{background:#fff;border:2px solid var(--navy);outline:1px solid var(--navy);outline-offset:3px;border-radius:2px;padding:14px;margin:0 0 22px}
 .card h2{font-family:'Oswald',sans-serif;font-weight:500;text-transform:uppercase;letter-spacing:.6px;font-size:14px;color:var(--navy);margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
-.shot{border:2px dashed var(--line);border-radius:2px;min-height:170px;display:flex;align-items:center;justify-content:center;background:#f7fafd;overflow:hidden;margin-bottom:10px}
+.shot{border:2px dashed var(--line);border-radius:2px;min-height:160px;display:flex;align-items:center;justify-content:center;background:#f7fafd;overflow:hidden;margin-bottom:10px}
 .shot span{font-size:13px;color:#6b7a89;padding:16px;text-align:center}
 .shot img{width:100%;display:block}
 .btn{display:block;width:100%;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:.7px;font-size:15px;font-weight:500;border:0;border-radius:2px;padding:13px;cursor:pointer}
@@ -35,12 +35,11 @@ main{max-width:520px;margin:0 auto;padding:14px 14px 40px}
 .btn.ghost{background:#fff;color:var(--navy);border:2px solid var(--navy)}
 .btn+.btn{margin-top:8px}
 .btn[disabled]{opacity:.55;cursor:not-allowed}
-.field{margin-bottom:12px}
-.field label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--navy);margin:0 0 4px}
-.field input{width:100%;padding:11px 10px;font-size:16px;font-family:inherit;border:1px solid var(--line);border-radius:2px;background:#fff;color:var(--ink)}
-.field input:focus{outline:2px solid var(--gold);border-color:var(--navy)}
-.field input.empty{background:#fdeceb;border-color:#e0a6a2}
-.note{background:#fff8e1;border-left:4px solid var(--gold);padding:9px 10px;font-size:12.5px;margin:0 0 14px}
+.row{padding:9px 0;border-bottom:1px solid #e6edf4}
+.row:last-child{border-bottom:0}
+.row .k{font-family:'Oswald',sans-serif;font-size:11.5px;font-weight:500;text-transform:uppercase;letter-spacing:.7px;color:var(--navy)}
+.row .v{font-size:16px;font-weight:500;word-break:break-word;margin-top:1px}
+.row .v.none{color:var(--bad);font-weight:400;font-style:italic}
 .status{margin-top:10px;font-size:13px;padding:9px 10px;border-radius:2px;display:none}
 .status.show{display:block}
 .status.work{background:#e8f0f8;color:var(--navy)}
@@ -49,67 +48,54 @@ main{max-width:520px;margin:0 auto;padding:14px 14px 40px}
 .spin{width:14px;height:14px;border:2px solid #b9cde2;border-top-color:var(--navy);border-radius:50%;display:inline-block;vertical-align:-2px;margin-right:6px;animation:sp .7s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spin{animation:none}}
-#step2{display:none}
-pre{white-space:pre-wrap;font-size:11px;margin:0}
+#out{display:none}
 </style>
 </head>
 <body>
 
 <header>
   <h1>ID Capture</h1>
-  <p>Snap a card, check the fields, submit</p>
+  <p>Snap a card, read what it says</p>
 </header>
 
 <main>
 
   <div class="card">
-    <h2>1. Photo of the card</h2>
+    <h2>Photo of the card</h2>
     <div class="shot" id="shot"><span>No photo yet. Hold the card flat, fill the frame, avoid glare.</span></div>
     <input type="file" id="file" accept="image/*" capture="environment" hidden>
     <button class="btn primary" id="snap">Take photo</button>
     <button class="btn ghost" id="pick">Choose from gallery</button>
     <button class="btn gold" id="read" disabled>Read the card</button>
-    <div class="status" id="st1"></div>
+    <div class="status" id="st"></div>
   </div>
 
-  <div class="card" id="step2">
-    <h2>2. Fields read from the card</h2>
-    <p class="note">Every label printed on the card becomes a column, the text after it becomes the value. Correct anything wrong, then submit.</p>
-    <div id="fields"></div>
-    <button class="btn primary" id="submit">Submit record</button>
-    <button class="btn ghost" id="reset">Start a new record</button>
-    <div class="status" id="st2"></div>
+  <div class="card" id="out">
+    <h2>What the card says</h2>
+    <div id="rows"></div>
+    <button class="btn ghost" id="reset" style="margin-top:14px">Read another card</button>
   </div>
 
 </main>
 
 <script>
-/* ------------------------------------------------------------------
-   CONFIG
-   PROXY_URL   Apps Script web app holding your Anthropic API key. It
-               forwards the body to /v1/messages. Leave blank to call the
-               API directly, which only works inside Claude previews.
-   SUBMIT_URL  Apps Script web app that appends the record to your sheet.
-               Leave blank to see the payload on screen instead of sending.
--------------------------------------------------------------------*/
-var PROXY_URL  = "";
-var SUBMIT_URL = "";
+/* PROXY_URL: Apps Script or other endpoint holding your Anthropic API key.
+   Leave blank to call the API directly, which works inside Claude previews. */
+var PROXY_URL = "";
 
-var imgB64 = null, imgType = "image/jpeg";
-
-var shot    = document.getElementById('shot');
-var file    = document.getElementById('file');
-var st1     = document.getElementById('st1');
-var st2     = document.getElementById('st2');
-var step2   = document.getElementById('step2');
-var fieldsEl = document.getElementById('fields');
+var imgB64 = null, imgType = 'image/jpeg';
+var shot = document.getElementById('shot');
+var file = document.getElementById('file');
+var st   = document.getElementById('st');
+var out  = document.getElementById('out');
+var rows = document.getElementById('rows');
 var readBtn = document.getElementById('read');
 
-function say(el, kind, html){
-  el.className = 'status show ' + kind;
-  el.innerHTML = (kind === 'work' ? '<span class="spin"></span>' : '') + html;
+function say(kind, html){
+  st.className = 'status show ' + kind;
+  st.innerHTML = (kind === 'work' ? '<span class="spin"></span>' : '') + html;
 }
-function clear(el){ el.className = 'status'; el.innerHTML = ''; }
+function clear(){ st.className = 'status'; st.innerHTML = ''; }
 
 document.getElementById('snap').onclick = function(){
   file.setAttribute('capture','environment'); file.value = ''; file.click();
@@ -121,12 +107,13 @@ document.getElementById('pick').onclick = function(){
 file.onchange = function(){
   var f = file.files && file.files[0];
   if(!f) return;
-  clear(st1);
+  clear();
+  out.style.display = 'none';
   shrink(f, function(b64){
     imgB64 = b64;
     shot.innerHTML = '<img src="data:image/jpeg;base64,' + b64 + '" alt="Captured card">';
     readBtn.disabled = false;
-  }, function(msg){ say(st1,'err', msg); });
+  }, function(msg){ say('err', msg); });
 };
 
 /* resize to max 1600px on the long side, JPEG 0.85, return bare base64 */
@@ -164,13 +151,12 @@ var PROMPT =
 readBtn.onclick = function(){
   if(!imgB64) return;
   readBtn.disabled = true;
-  say(st1,'work','Reading the card...');
+  say('work','Reading the card...');
 
   fetch(PROXY_URL || 'https://api.anthropic.com/v1/messages', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
-      task:'read',
       model:'claude-sonnet-4-6',
       max_tokens:1000,
       messages:[{
@@ -191,91 +177,42 @@ readBtn.onclick = function(){
                                  .map(function(b){ return b.text; }).join('\n');
     var a = text.indexOf('{'), b = text.lastIndexOf('}');
     if(a < 0 || b < a) throw new Error('The reply was not in the expected format.');
-    var out = JSON.parse(text.slice(a, b+1));
-    var list = (out.fields || []).filter(function(f){ return f && f.label; });
+    var list = (JSON.parse(text.slice(a, b+1)).fields || []).filter(function(f){ return f && f.label; });
     if(!list.length) throw new Error('No labelled fields were found on the card.');
 
-    draw(list);
-    step2.style.display = 'block';
+    show(list);
     var blank = list.filter(function(f){ return !f.value; }).length;
-    say(st1, blank ? 'err' : 'good',
-      list.length + ' fields read' + (blank ? ', ' + blank + ' came back empty. Retake the photo in better light, or type them in below.'
-                                            : '. Check them below.'));
+    say(blank ? 'err' : 'good',
+        list.length + ' fields read' + (blank ? ', ' + blank + ' could not be made out. Retake the photo in better light.' : '.'));
     readBtn.disabled = false;
-    step2.scrollIntoView({behavior:'smooth', block:'start'});
+    out.scrollIntoView({behavior:'smooth', block:'start'});
   })
   .catch(function(e){
-    say(st1,'err','Could not read the card. ' + e.message);
+    say('err','Could not read the card. ' + e.message);
     readBtn.disabled = false;
   });
 };
 
-function draw(list){
-  fieldsEl.innerHTML = '';
-  list.forEach(function(f, i){
-    var wrap = document.createElement('div');
-    wrap.className = 'field';
-    var lab = document.createElement('label');
-    lab.textContent = f.label;
-    lab.setAttribute('for', 'fld' + i);
-    var inp = document.createElement('input');
-    inp.id = 'fld' + i;
-    inp.value = f.value == null ? '' : String(f.value);
-    inp.setAttribute('data-label', f.label);
-    inp.autocomplete = 'off';
-    if(!inp.value) inp.className = 'empty';
-    inp.oninput = function(){ inp.className = inp.value ? '' : 'empty'; };
-    wrap.appendChild(lab); wrap.appendChild(inp);
-    fieldsEl.appendChild(wrap);
+function show(list){
+  rows.innerHTML = '';
+  list.forEach(function(f){
+    var row = document.createElement('div'); row.className = 'row';
+    var k = document.createElement('div'); k.className = 'k'; k.textContent = f.label;
+    var v = document.createElement('div'); v.className = 'v';
+    if(f.value){ v.textContent = f.value; } else { v.className = 'v none'; v.textContent = 'not read'; }
+    row.appendChild(k); row.appendChild(v);
+    rows.appendChild(row);
   });
+  out.style.display = 'block';
 }
-
-function collect(){
-  return [].map.call(fieldsEl.querySelectorAll('input'), function(i){
-    return { label: i.getAttribute('data-label'), value: i.value.trim() };
-  });
-}
-
-document.getElementById('submit').onclick = function(){
-  var fields = collect();
-  if(!fields.filter(function(f){ return f.value; }).length){
-    say(st2,'err','Every field is empty. Fill in at least one before submitting.');
-    return;
-  }
-
-  var rec = { captured_at: new Date().toISOString(), fields: fields, image_base64: imgB64 || '' };
-
-  if(!SUBMIT_URL){
-    var shown = { captured_at: rec.captured_at, fields: fields,
-                  image_base64: '[' + Math.round((imgB64||'').length/1365) + ' KB of JPEG]' };
-    say(st2,'good','No submit address set yet. This is the record that would be sent:<br><br><pre>' +
-        JSON.stringify(shown, null, 1).replace(/</g,'&lt;') + '</pre>');
-    return;
-  }
-
-  say(st2,'work','Submitting...');
-  fetch(SUBMIT_URL, {
-    method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body: JSON.stringify(rec)
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(o){
-    if(o && o.ok) say(st2,'good','Submitted. Reference ' + (o.id || 'saved') + '.');
-    else throw new Error((o && o.error) || 'the server did not confirm the save');
-  })
-  .catch(function(e){
-    say(st2,'err','Not submitted. ' + e.message + ' The fields are still here, try again.');
-  });
-};
 
 document.getElementById('reset').onclick = function(){
   imgB64 = null;
-  fieldsEl.innerHTML = '';
-  step2.style.display = 'none';
+  rows.innerHTML = '';
+  out.style.display = 'none';
   shot.innerHTML = '<span>No photo yet. Hold the card flat, fill the frame, avoid glare.</span>';
   readBtn.disabled = true;
-  clear(st1); clear(st2);
+  clear();
   window.scrollTo({top:0, behavior:'smooth'});
 };
 </script>
