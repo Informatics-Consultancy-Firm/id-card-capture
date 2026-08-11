@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>ID Capture</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#004080;
+  --navy-dark:#002d5a;
+  --gold:#ffc107;
+  --ink:#1b2733;
+  --line:#c9d6e4;
+  --bg:#eef3f8;
+  --ok:#1c7c4a;
+  --bad:#b3261e;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{background:var(--bg);font-family:'Roboto',Arial,sans-serif;color:var(--ink);font-size:15px;line-height:1.45}
+header{background:var(--navy);border-bottom:4px solid var(--gold);padding:14px 16px;position:sticky;top:0;z-index:5}
+header h1{font-family:'Oswald',sans-serif;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:#fff;margin:0;font-size:19px}
+header p{margin:2px 0 0;color:#cfe0f2;font-size:12px}
+main{max-width:520px;margin:0 auto;padding:14px 14px 40px}
+.card{background:#fff;border:2px solid var(--navy);outline:1px solid var(--navy);outline-offset:3px;border-radius:2px;padding:14px;margin:0 0 22px}
+.card h2{font-family:'Oswald',sans-serif;font-weight:500;text-transform:uppercase;letter-spacing:.6px;font-size:14px;color:var(--navy);margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.shot{border:2px dashed var(--line);border-radius:2px;min-height:170px;display:flex;align-items:center;justify-content:center;background:#f7fafd;overflow:hidden;margin-bottom:10px}
+.shot span{font-size:13px;color:#6b7a89;padding:16px;text-align:center}
+.shot img{width:100%;display:block}
+.btn{display:block;width:100%;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:.7px;font-size:15px;font-weight:500;border:0;border-radius:2px;padding:13px;cursor:pointer}
+.btn.primary{background:var(--navy);color:#fff}
+.btn.primary:active{background:var(--navy-dark)}
+.btn.gold{background:var(--gold);color:#1b2733}
+.btn.ghost{background:#fff;color:var(--navy);border:2px solid var(--navy)}
+.btn+.btn{margin-top:8px}
+.btn[disabled]{opacity:.55;cursor:not-allowed}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--navy);margin:0 0 4px}
+.field input{width:100%;padding:11px 10px;font-size:16px;font-family:inherit;border:1px solid var(--line);border-radius:2px;background:#fff;color:var(--ink)}
+.field input:focus{outline:2px solid var(--gold);border-color:var(--navy)}
+.field input.empty{background:#fdeceb;border-color:#e0a6a2}
+.note{background:#fff8e1;border-left:4px solid var(--gold);padding:9px 10px;font-size:12.5px;margin:0 0 14px}
+.status{margin-top:10px;font-size:13px;padding:9px 10px;border-radius:2px;display:none}
+.status.show{display:block}
+.status.work{background:#e8f0f8;color:var(--navy)}
+.status.good{background:#e6f4ec;color:var(--ok)}
+.status.err{background:#fdeceb;color:var(--bad)}
+.spin{width:14px;height:14px;border:2px solid #b9cde2;border-top-color:var(--navy);border-radius:50%;display:inline-block;vertical-align:-2px;margin-right:6px;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+#step2{display:none}
+pre{white-space:pre-wrap;font-size:11px;margin:0}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ID Capture</h1>
+  <p>Snap a card, check the fields, submit</p>
+</header>
+
+<main>
+
+  <div class="card">
+    <h2>1. Photo of the card</h2>
+    <div class="shot" id="shot"><span>No photo yet. Hold the card flat, fill the frame, avoid glare.</span></div>
+    <input type="file" id="file" accept="image/*" capture="environment" hidden>
+    <button class="btn primary" id="snap">Take photo</button>
+    <button class="btn ghost" id="pick">Choose from gallery</button>
+    <button class="btn gold" id="read" disabled>Read the card</button>
+    <div class="status" id="st1"></div>
+  </div>
+
+  <div class="card" id="step2">
+    <h2>2. Fields read from the card</h2>
+    <p class="note">Every label printed on the card becomes a column, the text after it becomes the value. Correct anything wrong, then submit.</p>
+    <div id="fields"></div>
+    <button class="btn primary" id="submit">Submit record</button>
+    <button class="btn ghost" id="reset">Start a new record</button>
+    <div class="status" id="st2"></div>
+  </div>
+
+</main>
+
+<script>
+/* ------------------------------------------------------------------
+   CONFIG
+   PROXY_URL   Apps Script web app holding your Anthropic API key. It
+               forwards the body to /v1/messages. Leave blank to call the
+               API directly, which only works inside Claude previews.
+   SUBMIT_URL  Apps Script web app that appends the record to your sheet.
+               Leave blank to see the payload on screen instead of sending.
+-------------------------------------------------------------------*/
+var PROXY_URL  = "";
+var SUBMIT_URL = "";
+
+var imgB64 = null, imgType = "image/jpeg";
+
+var shot    = document.getElementById('shot');
+var file    = document.getElementById('file');
+var st1     = document.getElementById('st1');
+var st2     = document.getElementById('st2');
+var step2   = document.getElementById('step2');
+var fieldsEl = document.getElementById('fields');
+var readBtn = document.getElementById('read');
+
+function say(el, kind, html){
+  el.className = 'status show ' + kind;
+  el.innerHTML = (kind === 'work' ? '<span class="spin"></span>' : '') + html;
+}
+function clear(el){ el.className = 'status'; el.innerHTML = ''; }
+
+document.getElementById('snap').onclick = function(){
+  file.setAttribute('capture','environment'); file.value = ''; file.click();
+};
+document.getElementById('pick').onclick = function(){
+  file.removeAttribute('capture'); file.value = ''; file.click();
+};
+
+file.onchange = function(){
+  var f = file.files && file.files[0];
+  if(!f) return;
+  clear(st1);
+  shrink(f, function(b64){
+    imgB64 = b64;
+    shot.innerHTML = '<img src="data:image/jpeg;base64,' + b64 + '" alt="Captured card">';
+    readBtn.disabled = false;
+  }, function(msg){ say(st1,'err', msg); });
+};
+
+/* resize to max 1600px on the long side, JPEG 0.85, return bare base64 */
+function shrink(f, done, fail){
+  var r = new FileReader();
+  r.onerror = function(){ fail('Could not read that file. Try taking the photo again.'); };
+  r.onload = function(){
+    var im = new Image();
+    im.onerror = function(){ fail('That file is not an image the browser can open.'); };
+    im.onload = function(){
+      var max = 1600, w = im.width, h = im.height;
+      if(Math.max(w,h) > max){ var s = max/Math.max(w,h); w = Math.round(w*s); h = Math.round(h*s); }
+      var c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(im, 0, 0, w, h);
+      imgType = 'image/jpeg';
+      done(c.toDataURL('image/jpeg', 0.85).split(',')[1]);
+    };
+    im.src = r.result;
+  };
+  r.readAsDataURL(f);
+}
+
+var PROMPT =
+  'This image is an identity, staff or membership card. Read all of the printed text on it.\n' +
+  'Reply with one JSON object and nothing else: no explanation, no code fences.\n' +
+  'Shape: {"fields":[{"label":"...","value":"..."}]}\n' +
+  'Rules:\n' +
+  '1. Where the card prints a label and a value separated by a colon, the printed label is the label, without the colon, and the text after the colon is the value.\n' +
+  '2. Where a value is printed with no label, such as the person name, the job title or the organisation name, give it a short plain label: Name, Position, Organisation.\n' +
+  '3. Keep the fields in the order they appear on the card, reading top to bottom.\n' +
+  '4. Copy each value exactly as printed. Keep the punctuation, spacing and case of phone numbers, emails and identifiers.\n' +
+  '5. Use an empty string for a label whose value is printed but unreadable. Never invent a field that is not on the card, and never guess a value.\n' +
+  '6. Leave out slogans, decorative text and anything printed inside the photograph.';
+
+readBtn.onclick = function(){
+  if(!imgB64) return;
+  readBtn.disabled = true;
+  say(st1,'work','Reading the card...');
+
+  fetch(PROXY_URL || 'https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      task:'read',
+      model:'claude-sonnet-4-6',
+      max_tokens:1000,
+      messages:[{
+        role:'user',
+        content:[
+          {type:'image', source:{type:'base64', media_type:imgType, data:imgB64}},
+          {type:'text', text:PROMPT}
+        ]
+      }]
+    })
+  })
+  .then(function(res){
+    if(!res.ok) return res.text().then(function(t){ throw new Error('Server replied ' + res.status + '. ' + t.slice(0,200)); });
+    return res.json();
+  })
+  .then(function(data){
+    var text = (data.content||[]).filter(function(b){ return b.type === 'text'; })
+                                 .map(function(b){ return b.text; }).join('\n');
+    var a = text.indexOf('{'), b = text.lastIndexOf('}');
+    if(a < 0 || b < a) throw new Error('The reply was not in the expected format.');
+    var out = JSON.parse(text.slice(a, b+1));
+    var list = (out.fields || []).filter(function(f){ return f && f.label; });
+    if(!list.length) throw new Error('No labelled fields were found on the card.');
+
+    draw(list);
+    step2.style.display = 'block';
+    var blank = list.filter(function(f){ return !f.value; }).length;
+    say(st1, blank ? 'err' : 'good',
+      list.length + ' fields read' + (blank ? ', ' + blank + ' came back empty. Retake the photo in better light, or type them in below.'
+                                            : '. Check them below.'));
+    readBtn.disabled = false;
+    step2.scrollIntoView({behavior:'smooth', block:'start'});
+  })
+  .catch(function(e){
+    say(st1,'err','Could not read the card. ' + e.message);
+    readBtn.disabled = false;
+  });
+};
+
+function draw(list){
+  fieldsEl.innerHTML = '';
+  list.forEach(function(f, i){
+    var wrap = document.createElement('div');
+    wrap.className = 'field';
+    var lab = document.createElement('label');
+    lab.textContent = f.label;
+    lab.setAttribute('for', 'fld' + i);
+    var inp = document.createElement('input');
+    inp.id = 'fld' + i;
+    inp.value = f.value == null ? '' : String(f.value);
+    inp.setAttribute('data-label', f.label);
+    inp.autocomplete = 'off';
+    if(!inp.value) inp.className = 'empty';
+    inp.oninput = function(){ inp.className = inp.value ? '' : 'empty'; };
+    wrap.appendChild(lab); wrap.appendChild(inp);
+    fieldsEl.appendChild(wrap);
+  });
+}
+
+function collect(){
+  return [].map.call(fieldsEl.querySelectorAll('input'), function(i){
+    return { label: i.getAttribute('data-label'), value: i.value.trim() };
+  });
+}
+
+document.getElementById('submit').onclick = function(){
+  var fields = collect();
+  if(!fields.filter(function(f){ return f.value; }).length){
+    say(st2,'err','Every field is empty. Fill in at least one before submitting.');
+    return;
+  }
+
+  var rec = { captured_at: new Date().toISOString(), fields: fields, image_base64: imgB64 || '' };
+
+  if(!SUBMIT_URL){
+    var shown = { captured_at: rec.captured_at, fields: fields,
+                  image_base64: '[' + Math.round((imgB64||'').length/1365) + ' KB of JPEG]' };
+    say(st2,'good','No submit address set yet. This is the record that would be sent:<br><br><pre>' +
+        JSON.stringify(shown, null, 1).replace(/</g,'&lt;') + '</pre>');
+    return;
+  }
+
+  say(st2,'work','Submitting...');
+  fetch(SUBMIT_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify(rec)
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(o){
+    if(o && o.ok) say(st2,'good','Submitted. Reference ' + (o.id || 'saved') + '.');
+    else throw new Error((o && o.error) || 'the server did not confirm the save');
+  })
+  .catch(function(e){
+    say(st2,'err','Not submitted. ' + e.message + ' The fields are still here, try again.');
+  });
+};
+
+document.getElementById('reset').onclick = function(){
+  imgB64 = null;
+  fieldsEl.innerHTML = '';
+  step2.style.display = 'none';
+  shot.innerHTML = '<span>No photo yet. Hold the card flat, fill the frame, avoid glare.</span>';
+  readBtn.disabled = true;
+  clear(st1); clear(st2);
+  window.scrollTo({top:0, behavior:'smooth'});
+};
+</script>
+</body>
+</html>
