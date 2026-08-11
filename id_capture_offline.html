@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>ID Capture</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#004080;
+  --navy-dark:#002d5a;
+  --gold:#ffc107;
+  --ink:#1b2733;
+  --line:#c9d6e4;
+  --bg:#eef3f8;
+  --ok:#1c7c4a;
+  --bad:#b3261e;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{background:var(--bg);font-family:'Roboto',Arial,sans-serif;color:var(--ink);font-size:15px;line-height:1.45}
+header{background:var(--navy);border-bottom:4px solid var(--gold);padding:14px 16px;position:sticky;top:0;z-index:5}
+header h1{font-family:'Oswald',sans-serif;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:#fff;margin:0;font-size:19px}
+header p{margin:2px 0 0;color:#cfe0f2;font-size:12px}
+main{max-width:520px;margin:0 auto;padding:14px 14px 40px}
+.card{background:#fff;border:2px solid var(--navy);outline:1px solid var(--navy);outline-offset:3px;border-radius:2px;padding:14px;margin:0 0 22px}
+.card h2{font-family:'Oswald',sans-serif;font-weight:500;text-transform:uppercase;letter-spacing:.6px;font-size:14px;color:var(--navy);margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.shot{border:2px dashed var(--line);border-radius:2px;min-height:160px;display:flex;align-items:center;justify-content:center;background:#f7fafd;overflow:hidden;margin-bottom:10px}
+.shot span{font-size:13px;color:#6b7a89;padding:16px;text-align:center}
+.shot img{width:100%;display:block}
+.btn{display:block;width:100%;font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:.7px;font-size:15px;font-weight:500;border:0;border-radius:2px;padding:13px;cursor:pointer}
+.btn.primary{background:var(--navy);color:#fff}
+.btn.primary:active{background:var(--navy-dark)}
+.btn.gold{background:var(--gold);color:#1b2733}
+.btn.ghost{background:#fff;color:var(--navy);border:2px solid var(--navy)}
+.btn+.btn{margin-top:8px}
+.btn[disabled]{opacity:.55;cursor:not-allowed}
+.row{padding:9px 0;border-bottom:1px solid #e6edf4}
+.row:last-child{border-bottom:0}
+.row .k{font-family:'Oswald',sans-serif;font-size:11.5px;font-weight:500;text-transform:uppercase;letter-spacing:.7px;color:var(--navy)}
+.row .v{font-size:16px;font-weight:500;word-break:break-word;margin-top:1px}
+.loose{margin-top:14px;padding-top:10px;border-top:1px solid var(--line)}
+.loose h3{font-family:'Oswald',sans-serif;font-size:11.5px;font-weight:500;text-transform:uppercase;letter-spacing:.7px;color:#6b7a89;margin:0 0 6px}
+.loose li{font-size:14px;margin-bottom:3px;word-break:break-word}
+.loose ul{margin:0;padding-left:18px}
+.badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:3px 7px;border-radius:2px;margin-bottom:10px}
+.badge.on{background:#e6f4ec;color:var(--ok)}
+.badge.off{background:#fdeceb;color:var(--bad)}
+.status{margin-top:10px;font-size:13px;padding:9px 10px;border-radius:2px;display:none}
+.status.show{display:block}
+.status.work{background:#e8f0f8;color:var(--navy)}
+.status.good{background:#e6f4ec;color:var(--ok)}
+.status.err{background:#fdeceb;color:var(--bad)}
+.spin{width:14px;height:14px;border:2px solid #b9cde2;border-top-color:var(--navy);border-radius:50%;display:inline-block;vertical-align:-2px;margin-right:6px;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+#out{display:none}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ID Capture</h1>
+  <p>Reads the card on the phone, no network</p>
+</header>
+
+<main>
+
+  <div class="card">
+    <h2>Photo of the card</h2>
+    <div id="engine" class="badge off">Checking the reader</div>
+    <div class="shot" id="shot"><span>No photo yet. Hold the card flat, fill the frame, avoid glare.</span></div>
+    <input type="file" id="file" accept="image/*" capture="environment" hidden>
+    <button class="btn primary" id="snap">Take photo</button>
+    <button class="btn ghost" id="pick">Choose from gallery</button>
+    <button class="btn gold" id="read" disabled>Read the card</button>
+    <div class="status" id="st"></div>
+  </div>
+
+  <div class="card" id="out">
+    <h2>What the card says</h2>
+    <div id="rows"></div>
+    <div class="loose" id="loose" style="display:none">
+      <h3>Text with no label</h3>
+      <ul id="looseList"></ul>
+    </div>
+    <button class="btn ghost" id="reset" style="margin-top:14px">Read another card</button>
+  </div>
+
+</main>
+
+<script>
+var imgB64 = null;
+var shot = document.getElementById('shot');
+var file = document.getElementById('file');
+var st   = document.getElementById('st');
+var out  = document.getElementById('out');
+var rows = document.getElementById('rows');
+var loose = document.getElementById('loose');
+var looseList = document.getElementById('looseList');
+var readBtn = document.getElementById('read');
+var engine = document.getElementById('engine');
+
+var HAS_OCR = !!(window.AndroidOCR && window.AndroidOCR.recognise);
+engine.className = 'badge ' + (HAS_OCR ? 'on' : 'off');
+engine.textContent = HAS_OCR ? 'On device reader ready' : 'Open this in the Android app to read cards';
+
+function say(kind, html){
+  st.className = 'status show ' + kind;
+  st.innerHTML = (kind === 'work' ? '<span class="spin"></span>' : '') + html;
+}
+function clear(){ st.className = 'status'; st.innerHTML = ''; }
+
+document.getElementById('snap').onclick = function(){
+  file.setAttribute('capture','environment'); file.value = ''; file.click();
+};
+document.getElementById('pick').onclick = function(){
+  file.removeAttribute('capture'); file.value = ''; file.click();
+};
+
+file.onchange = function(){
+  var f = file.files && file.files[0];
+  if(!f) return;
+  clear(); out.style.display = 'none';
+  shrink(f, function(b64){
+    imgB64 = b64;
+    shot.innerHTML = '<img src="data:image/jpeg;base64,' + b64 + '" alt="Captured card">';
+    readBtn.disabled = !HAS_OCR;
+    if(!HAS_OCR) say('err','This page is running in a browser, where there is no on device reader. Install it inside the Android app to read the card.');
+  }, function(msg){ say('err', msg); });
+};
+
+/* resize to max 1800px on the long side, JPEG 0.9. Text recognition likes
+   detail, so this is a little larger and cleaner than the upload version. */
+function shrink(f, done, fail){
+  var r = new FileReader();
+  r.onerror = function(){ fail('Could not read that file. Try taking the photo again.'); };
+  r.onload = function(){
+    var im = new Image();
+    im.onerror = function(){ fail('That file is not an image the browser can open.'); };
+    im.onload = function(){
+      var max = 1800, w = im.width, h = im.height;
+      if(Math.max(w,h) > max){ var s = max/Math.max(w,h); w = Math.round(w*s); h = Math.round(h*s); }
+      var c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(im, 0, 0, w, h);
+      done(c.toDataURL('image/jpeg', 0.9).split(',')[1]);
+    };
+    im.src = r.result;
+  };
+  r.readAsDataURL(f);
+}
+
+/* ---- the bridge callback, one pending job at a time ---- */
+var pending = {};
+window.__ocrDone = function(token, payload){
+  var cb = pending[token];
+  delete pending[token];
+  if(cb) cb(payload);
+};
+
+readBtn.onclick = function(){
+  if(!imgB64 || !HAS_OCR) return;
+  readBtn.disabled = true;
+  say('work','Reading the card on the phone...');
+
+  var token = 't' + Date.now();
+  var timer = setTimeout(function(){
+    if(pending[token]){
+      delete pending[token];
+      say('err','The reader did not answer. Close the app and open it again.');
+      readBtn.disabled = false;
+    }
+  }, 20000);
+
+  pending[token] = function(res){
+    clearTimeout(timer);
+    readBtn.disabled = false;
+    if(!res || !res.ok){
+      say('err', (res && res.error) || 'The reader returned nothing.');
+      return;
+    }
+    var parsed = parse(res.lines || []);
+    if(!parsed.fields.length && !parsed.loose.length){
+      say('err','No text was found. Move closer, hold the card flat, and keep the light off the surface.');
+      return;
+    }
+    show(parsed);
+    say(parsed.fields.length ? 'good' : 'err',
+        parsed.fields.length
+          ? parsed.fields.length + ' labelled fields found' + (parsed.loose.length ? ', plus ' + parsed.loose.length + ' lines with no label.' : '.')
+          : 'Text was found but no labels. The lines are listed below.');
+    out.scrollIntoView({behavior:'smooth', block:'start'});
+  };
+
+  try{
+    window.AndroidOCR.recognise(imgB64, token);
+  }catch(e){
+    clearTimeout(timer); delete pending[token];
+    say('err','The reader could not be started. ' + e.message);
+    readBtn.disabled = false;
+  }
+};
+
+/* ---- label before the colon, value after it ----
+   A colon only counts as a separator when the part before it is short and
+   looks like a label, so 12:30 in a time and http:// in a link stay intact.
+   A label whose value sits on the next line picks that line up.            */
+function parse(lines){
+  var clean = lines.map(function(l){ return String(l).replace(/\s+/g,' ').trim(); })
+                   .filter(function(l){ return l.length > 0; });
+  var fields = [], loose = [], used = {};
+
+  clean.forEach(function(line, i){
+    if(used[i]) return;
+    var at = line.indexOf(':');
+    var label = at > -1 ? line.slice(0, at).trim() : '';
+    var value = at > -1 ? line.slice(at + 1).trim() : '';
+    var looksLikeLabel = at > 0 && label.length <= 24 && /[A-Za-z]/.test(label) &&
+                         !/[@\/]/.test(label) && !/^\d+$/.test(label);
+
+    if(!looksLikeLabel){ loose.push(line); return; }
+
+    if(!value && clean[i+1] !== undefined){
+      var next = clean[i+1];
+      if(next.indexOf(':') === -1){ value = next; used[i+1] = true; }
+    }
+    fields.push({ label: label, value: value });
+  });
+
+  // fold a repeated label into one row rather than showing it twice
+  var seen = {}, merged = [];
+  fields.forEach(function(f){
+    var key = f.label.toLowerCase();
+    if(seen[key] !== undefined){
+      if(f.value) merged[seen[key]].value = (merged[seen[key]].value + ' ' + f.value).trim();
+    } else {
+      seen[key] = merged.length;
+      merged.push(f);
+    }
+  });
+
+  return { fields: merged, loose: loose };
+}
+
+function show(parsed){
+  rows.innerHTML = '';
+  parsed.fields.forEach(function(f){
+    var row = document.createElement('div'); row.className = 'row';
+    var k = document.createElement('div'); k.className = 'k'; k.textContent = f.label;
+    var v = document.createElement('div'); v.className = 'v'; v.textContent = f.value || 'not read';
+    row.appendChild(k); row.appendChild(v);
+    rows.appendChild(row);
+  });
+
+  looseList.innerHTML = '';
+  parsed.loose.forEach(function(l){
+    var li = document.createElement('li'); li.textContent = l; looseList.appendChild(li);
+  });
+  loose.style.display = parsed.loose.length ? 'block' : 'none';
+
+  out.style.display = 'block';
+}
+
+document.getElementById('reset').onclick = function(){
+  imgB64 = null;
+  rows.innerHTML = ''; looseList.innerHTML = '';
+  loose.style.display = 'none';
+  out.style.display = 'none';
+  shot.innerHTML = '<span>No photo yet. Hold the card flat, fill the frame, avoid glare.</span>';
+  readBtn.disabled = true;
+  clear();
+  window.scrollTo({top:0, behavior:'smooth'});
+};
+</script>
+</body>
+</html>
